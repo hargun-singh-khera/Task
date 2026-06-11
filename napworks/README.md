@@ -27,14 +27,6 @@ Frontend: [http://localhost:3000](http://localhost:3000)
 
 API: [http://localhost:5000](http://localhost:5000)
 
-## Environment
-
-```env
-PORT=5000
-CLIENT_ORIGIN=http://localhost:3000
-MONGODB_URI=mongodb://127.0.0.1:27017/napworks
-```
-
 ## API Routes
 
 Healthcheck comes first:
@@ -48,8 +40,6 @@ Product CRUD templates:
 ```http
 GET /api/products
 POST /api/products
-GET /api/products/:id
-PATCH /api/products/:id
 DELETE /api/products/:id
 ```
 
@@ -58,11 +48,7 @@ Create product example:
 ```json
 {
   "name": "Ergonomic Chair",
-  "description": "Mesh chair with lumbar support",
   "price": 129.99,
-  "sku": "CHAIR-001",
-  "stock": 25,
-  "category": "office"
 }
 ```
 
