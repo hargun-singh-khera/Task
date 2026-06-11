@@ -33,12 +33,13 @@ export default function ProductsPage() {
   const [totalPages, setTotalPages] = useState(1);
   const [pageNumber, setPageNumber] = useState(1);
 
+  // Local (display) filters — update on every keystroke / change
   const [filters, setFilters] = useState(DEFAULT_FILTERS);
-  // Committed filters — only applied when user hits Apply / search
+  // Committed filters — trigger the API fetch
   const [appliedFilters, setAppliedFilters] = useState(DEFAULT_FILTERS);
   const [showFilters, setShowFilters] = useState(false);
 
-  // ─── Fetch ──────────────────────────────────────────────────────────────────
+  // ─── Fetch ────────────────────────────────────────────────────────────────
 
   const fetchProducts = useCallback(async (page, activeFilters) => {
     try {
@@ -54,88 +55,94 @@ export default function ProductsPage() {
       setProducts(response.data ?? []);
       setTotalRecords(response.totalRecords ?? 0);
       setTotalPages(response.totalPages ?? 1);
+      // Trust the server's returned page number — avoids off-by-one on edge cases
       setPageNumber(response.pageNumber ?? page);
     } catch (error) {
       console.error(error);
+      toast.error("Failed to load products. Please try again.");
     } finally {
       setLoading(false);
     }
   }, []);
 
-  // Fire whenever appliedFilters or pageNumber change
+  // Single source of truth: re-fetch whenever page or applied filters change
   useEffect(() => {
     fetchProducts(pageNumber, appliedFilters);
   }, [pageNumber, appliedFilters, fetchProducts]);
 
-  // ─── Handlers ───────────────────────────────────────────────────────────────
+  // ─── Search (debounced) ───────────────────────────────────────────────────
 
-  // Debounce ref for search only
   const searchDebounceRef = useRef(null);
+
+  // Clean up the debounce timer when the component unmounts
+  useEffect(() => () => clearTimeout(searchDebounceRef.current), []);
 
   const handleSearchChange = (e) => {
     const value = e.target.value;
-    // Update local display immediately
     setFilters((prev) => ({ ...prev, search: value }));
 
-    // Debounce the API call by 500ms
     clearTimeout(searchDebounceRef.current);
     searchDebounceRef.current = setTimeout(() => {
+      // Reset to page 1 and commit new search term in one state update batch
       setPageNumber(1);
       setAppliedFilters((prev) => ({ ...prev, search: value }));
     }, 500);
   };
 
-  // Cleanup debounce on unmount
-  useEffect(() => () => clearTimeout(searchDebounceRef.current), []);
+  // ─── Price / Date filters (commit on blur) ────────────────────────────────
 
-  // For date/price: update local state on change, commit to API only on blur
   const handleFilterChange = (e) => {
     const { name, value } = e.target;
     setFilters((prev) => ({ ...prev, [name]: value }));
   };
 
+  // Read the committed value from local `filters` state (not e.target.value)
+  // to avoid any edge-case mismatch between the DOM and React state on blur.
   const handleFilterBlur = (e) => {
-    const { name, value } = e.target;
+    const { name } = e.target;
     setPageNumber(1);
-    setAppliedFilters((prev) => ({ ...prev, [name]: value }));
+    setAppliedFilters((prev) => ({ ...prev, [name]: filters[name] }));
   };
+
+  // ─── Pagination ───────────────────────────────────────────────────────────
 
   const handlePageChange = (newPage) => {
     if (newPage < 1 || newPage > totalPages) return;
     setPageNumber(newPage);
   };
 
-  // ─── Render helpers ──────────────────────────────────────────────────────────
-
-  const startRecord = totalRecords === 0 ? 0 : (pageNumber - 1) * PAGE_SIZE + 1;
-  const endRecord = Math.min(pageNumber * PAGE_SIZE, totalRecords);
+  // ─── Delete ───────────────────────────────────────────────────────────────
 
   const handleDelete = async (id) => {
     if (!window.confirm("Delete this product?")) return;
 
     try {
       await deleteProduct(id);
-
-      const isLastItemOnPage = products.length === 1;
-      const shouldGoBack =
-        isLastItemOnPage && pageNumber > 1;
-
-      const nextPage = shouldGoBack
-        ? pageNumber - 1
-        : pageNumber;
-
-      setPageNumber(nextPage);
-      toast.success("Product Deleted Successfully");
-      fetchProducts(nextPage, appliedFilters);
+      toast.success("Product deleted successfully.");
+      // If we just removed the last item on a non-first page, go back one page.
+      // Use a functional update so we always act on the freshest pageNumber.
+      setPageNumber((prev) => {
+        const isLastOnPage = products.length === 1;
+        return isLastOnPage && prev > 1 ? prev - 1 : prev;
+      });
     } catch (error) {
       console.error(error);
+      toast.error("Failed to delete product. Please try again.");
     }
   };
+
+  // ─── Derived display values ───────────────────────────────────────────────
+
+  const startRecord = totalRecords === 0 ? 0 : (pageNumber - 1) * PAGE_SIZE + 1;
+  const endRecord = Math.min(pageNumber * PAGE_SIZE, totalRecords);
+
+  // ─── Render ───────────────────────────────────────────────────────────────
 
   return (
     <DashboardShell>
       <Toaster position="bottom-right" />
       <div className="mx-auto max-w-[980px]">
+
         {/* Header */}
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Product</h1>
@@ -167,16 +174,16 @@ export default function ProductsPage() {
               <div className="flex gap-3">
                 <button
                   onClick={() => setShowFilters((v) => !v)}
-                  className={`inline-flex h-10 items-center gap-2 rounded-lg border px-4 text-sm font-semibold transition-colors ${showFilters
-                    ? "border-[#246bfe] bg-[#246bfe]/10 text-[#246bfe]"
-                    : "border-[#aeb4bd] bg-white text-[#383c45]"
-                    }`}
+                  className={`inline-flex h-10 items-center gap-2 rounded-lg border px-4 text-sm font-semibold transition-colors ${
+                    showFilters
+                      ? "border-[#246bfe] bg-[#246bfe]/10 text-[#246bfe]"
+                      : "border-[#aeb4bd] bg-white text-[#383c45]"
+                  }`}
                 >
                   <FiFilter />
                   Filter
                 </button>
 
-                {/* New Product — useRouter navigation */}
                 <button
                   onClick={() => router.push("/products/add")}
                   className="inline-flex h-10 items-center gap-2 rounded-lg bg-[#246bfe] px-4 text-sm font-semibold text-white hover:bg-[#1a5ae8] transition-colors"
@@ -200,7 +207,6 @@ export default function ProductsPage() {
                       onChange={handleFilterChange}
                       onBlur={handleFilterBlur}
                       className="h-10 rounded-lg border border-[#c6cbd2] px-3 text-sm"
-                      placeholder="Start Date"
                     />
                     <input
                       type="date"
@@ -209,7 +215,6 @@ export default function ProductsPage() {
                       onChange={handleFilterChange}
                       onBlur={handleFilterBlur}
                       className="h-10 rounded-lg border border-[#c6cbd2] px-3 text-sm"
-                      placeholder="End Date"
                     />
                   </div>
                 </div>
@@ -259,19 +264,26 @@ export default function ProductsPage() {
               </thead>
               <tbody>
                 {loading ? (
-                  // Skeleton rows
                   Array.from({ length: 5 }).map((_, i) => (
                     <tr key={i} className="border-t border-[#dfe2e6] animate-pulse">
-                      <td className="px-4 py-3"><div className="h-4 w-4 rounded bg-[#e8eaed]" /></td>
+                      <td className="px-4 py-3">
+                        <div className="h-4 w-4 rounded bg-[#e8eaed]" />
+                      </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-3">
                           <div className="h-10 w-10 rounded-md bg-[#e8eaed]" />
                           <div className="h-4 w-36 rounded bg-[#e8eaed]" />
                         </div>
                       </td>
-                      <td className="px-4 py-3"><div className="h-4 w-16 rounded bg-[#e8eaed]" /></td>
-                      <td className="px-4 py-3"><div className="h-4 w-24 rounded bg-[#e8eaed]" /></td>
-                      <td className="px-4 py-3 text-center"><div className="mx-auto h-4 w-4 rounded bg-[#e8eaed]" /></td>
+                      <td className="px-4 py-3">
+                        <div className="h-4 w-16 rounded bg-[#e8eaed]" />
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="h-4 w-24 rounded bg-[#e8eaed]" />
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <div className="mx-auto h-4 w-4 rounded bg-[#e8eaed]" />
+                      </td>
                     </tr>
                   ))
                 ) : products.length === 0 ? (
@@ -282,7 +294,10 @@ export default function ProductsPage() {
                   </tr>
                 ) : (
                   products.map((product) => (
-                    <tr key={product._id} className="border-t border-[#dfe2e6] hover:bg-[#f8f9fb] transition-colors">
+                    <tr
+                      key={product._id}
+                      className="border-t border-[#dfe2e6] hover:bg-[#f8f9fb] transition-colors"
+                    >
                       <td className="px-4 py-3">
                         <input type="checkbox" aria-label={`Select ${product.name}`} />
                       </td>
@@ -293,7 +308,9 @@ export default function ProductsPage() {
                             alt={product?.name}
                             className="h-10 w-10 rounded-md object-cover"
                           />
-                          <span className="whitespace-nowrap font-medium">{product?.name}</span>
+                          <span className="whitespace-nowrap font-medium">
+                            {product?.name}
+                          </span>
                         </div>
                       </td>
                       <td className="px-4 py-3">${product?.price.toFixed(2)}</td>
@@ -336,8 +353,10 @@ export default function ProductsPage() {
                 "No results"
               ) : (
                 <>
-                  <span className="font-semibold text-[#246bfe]">{startRecord}–{endRecord}</span>
-                  {" "}of {totalRecords} products
+                  <span className="font-semibold text-[#246bfe]">
+                    {startRecord}–{endRecord}
+                  </span>{" "}
+                  of {totalRecords} products
                 </>
               )}
             </p>
