@@ -1,6 +1,6 @@
 # Napworks
 
-Next.js frontend with a separate Express API server connected to MongoDB.
+Next.js frontend app.
 
 ## Getting Started
 
@@ -20,12 +20,9 @@ Start MongoDB locally, then run the frontend and API in two terminals:
 
 ```bash
 npm run dev
-npm run dev:server
 ```
 
-Frontend: [http://localhost:3000](http://localhost:3000)
-
-API: [http://localhost:5000](http://localhost:5000)
+Live Demo: [https://napworks-xi.vercel.app](https://napworks-xi.vercel.app)
 
 ## API Routes
 
