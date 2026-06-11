@@ -76,9 +76,7 @@ GET /api/products?page=1&limit=10&search=chair&category=office
 
 ```bash
 npm run dev          # Next.js dev server
-npm run dev:server   # Express API server with watch mode
 npm run build        # Build Next.js app
 npm run start        # Start built Next.js app
-npm run start:server # Start Express API server
 npm run lint         # Run ESLint
 ```
